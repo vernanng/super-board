@@ -21,6 +21,8 @@ __pycache__/
 .claude/super-board/migrations/
 .claude/super-board/onboard-answers.json
 .claude/super-board/onboard-staged/
+.claude/super-board/onboard-mapped.json
+.claude/super-board/*units*.json
 .claude/super-board/backup/
 .claude/super-board/upgrade.json
 .claude/worktrees/
