@@ -1,9 +1,9 @@
 # super-board run — workflow backend contract
 
 The DEFAULT backend (v1.6.0+): used when the active config sets
-`"worker_backend": "workflow"` or omits the key. The legacy bash dispatcher
+`"worker_backend": "workflow"` or omits the key. The headless bash dispatcher
 (`.claude/bin/super-board-run.sh`, see `run.md`) runs only on explicit
-`"worker_backend": "claude-p"`; this file ONLY changes who dispatches
+`"worker_backend": "claude-p"` or `"opencode"`; this file ONLY changes who dispatches
 workers. Lane lifecycles, branch/PR model, comment cadence, Block
 templates, halt gates, and done conditions are all inherited from `run.md`
 unchanged.
@@ -24,6 +24,15 @@ Keep this run choice in each wave and resume command; skip only the Claude usage
 `bash .claude/bin/super-board-host.sh` prints `codex` → run as `--codex` (tier flags and
 `--codex=<model>` still apply); it counts as explicit `--codex`, Review included.
 Say so once, in the first wave report: `🔁 codex host — running as --codex`. Never improvise a Claude workflow wave in Codex.
+
+## OpenCode runs
+
+Inside OpenCode (`bash .claude/bin/super-board-host.sh` prints `opencode`) there is no Workflow
+tool either, so `run` uses the headless dispatcher in `run.md`: set `"worker_backend": "opencode"`
+in the config (onboard asks, or edit `.claude/super-board/configs/<slug>.json` directly) and the
+runner spawns `opencode run --auto` workers instead of `claude -p`. A plain `super-board run`
+then dispatches through the runner; `--codex` still overrides if the Codex CLI is installed.
+Say so once, in the first wave report: `🔁 opencode host — running headless (worker_backend opencode)`.
 
 After the same plan and claim steps, launch this command as a background task:
 `bash .claude/bin/super-board-codex-wave.sh --config <config-path> --cards <claimed-cards.json> --codex[=<model>] --tier <low|medium|high> --output <wave-result.json>`.
@@ -214,7 +223,8 @@ Repeat until a done condition or halt gate fires:
    there is no cross-session claim at all, so never run two orchestrators
    (or /loop re-entries) against the same board without bot_identity.
 4. **Launch** — With `--codex`, or no Workflow tool, or the host check printing `codex`, use
-   "Codex runs" above; otherwise Workflow tool with
+   "Codex runs" above; a host printing `opencode` uses the headless runner ("OpenCode runs"
+   above); otherwise Workflow tool with
    `scriptPath: .claude/workflows/super-board-wave.js` and
    `args: { configPath, cards, humanApprovesMerge, tier }` (`cards` straight from the planner: each
    carries `lane` and `labels`, and a `qa` card skips the Builder). Runs in the background; the

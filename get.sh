@@ -7,9 +7,10 @@
 # Options (everything else that starts with "-" goes straight to install.sh):
 #   --target <dir>        project to install into (default: the current folder)
 #   --ref <tag|branch>    which version to fetch (default: the latest release)
+#   --opencode            install for OpenCode (runs install-opencode.sh)
 #   --no-helper-skills    skip `npx skills@latest add mattpocock/skills`
 #   -h, --help            show this help
-# Passed through to install.sh: --no-hooks, --protect-main.
+# Passed through to install.sh: --no-hooks, --protect-main. Claude Code only: not valid with --opencode.
 #
 # Environment:
 #   SUPER_BOARD_REF       same as --ref
@@ -26,7 +27,7 @@ warn() { printf '⚠️  %s\n' "$*" >&2; }
 die()  { printf '❌ %s\n' "$*" >&2; exit "${2:-1}"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-usage() { sed -n '2,19p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null | sed 's/^# \{0,1\}//' || true; }
+usage() { sed -n '2,20p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null | sed 's/^# \{0,1\}//' || true; }
 
 # Matt Pocock's skills count as present when the project's skills-lock.json
 # lists them, or two of their skills already sit in a skills folder Claude reads.
@@ -42,7 +43,7 @@ helper_skills_present() {
 }
 
 main() {
-  local target="" ref="${SUPER_BOARD_REF:-}" helpers=1
+  local target="" ref="${SUPER_BOARD_REF:-}" helpers=1 opencode=0
   local repo="${SUPER_BOARD_REPO:-EricTechPro/super-board}"
   local pass=()
 
@@ -53,12 +54,21 @@ main() {
       --ref) [ $# -ge 2 ] || die "--ref needs a tag or branch name" 64; ref="$2"; shift 2 ;;
       --ref=*) ref="${1#--ref=}"; shift ;;
       --no-helper-skills) helpers=0; shift ;;
+      --opencode) opencode=1; shift ;;
       -h|--help) usage; exit 0 ;;
       -*) pass+=("$1"); shift ;;
       *) [ -z "$target" ] || die "two target folders given: '$target' and '$1'" 64; target="$1"; shift ;;
     esac
   done
   target="${target:-$PWD}"
+
+  # --no-hooks/--protect-main only mean something to install.sh (Claude Code).
+  if [ "$opencode" -eq 1 ]; then
+    case " ${pass[*]-} " in
+      *" --no-hooks "*|*" --protect-main "*)
+        die "--no-hooks and --protect-main are Claude Code only; drop them with --opencode." 64 ;;
+    esac
+  fi
 
   # --- safety -----------------------------------------------------------
   if [ "$(id -u)" -eq 0 ]; then
@@ -139,17 +149,21 @@ except Exception: print("")' 2>/dev/null || true)"
     fi
     src="$tmp/x"
   fi
-  [ -n "$src" ] && [ -f "$src/install.sh" ] || die "the download has no install.sh at its top level — is '$label' really super-board?" 1
+  local installer="install.sh"
+  [ "$opencode" -eq 1 ] && installer="install-opencode.sh"
+  [ -n "$src" ] && [ -f "$src/$installer" ] || die "the download has no $installer at its top level — is '$label' really super-board?" 1
   local version="?"
   [ -f "$src/VERSION" ] && version="$(tr -d '[:space:]' < "$src/VERSION")"
 
   # --- install ----------------------------------------------------------
-  # Quiet mode: install.sh prints only its "🔧 installing" group; the summary is ours.
-  SUPER_BOARD_QUIET_NEXT=1 bash "$src/install.sh" ${pass[@]+"${pass[@]}"} "$target" || die "install.sh stopped with an error (see above). Nothing else was changed after that point." 1
+  # Quiet mode: the installer prints only its "🔧 installing" group; the summary is ours.
+  SUPER_BOARD_QUIET_NEXT=1 bash "$src/$installer" ${pass[@]+"${pass[@]}"} "$target" || die "$installer stopped with an error (see above). Nothing else was changed after that point." 1
 
   # --- helper skills ----------------------------------------------------
   local helper_note
-  if [ "$helpers" -eq 0 ]; then
+  if [ "$opencode" -eq 1 ]; then
+    helper_note="skipped (OpenCode reads .claude/skills natively)"
+  elif [ "$helpers" -eq 0 ]; then
     case " $later " in
       *" node "*) helper_note="skipped — 🔍 Checks will fix this" ;;
       *) helper_note="skipped (--no-helper-skills)" ;;
@@ -169,7 +183,11 @@ except Exception: print("")' 2>/dev/null || true)"
   # --- summary ----------------------------------------------------------
   say "🧠 helper skills: $helper_note"
   say "🎉 super-board $version is installed"
-  say "👉 next: open Claude Code here and run /super-board onboard"
+  if [ "$opencode" -eq 1 ]; then
+    say "👉 next: open OpenCode here and run /super-board onboard"
+  else
+    say "👉 next: open Claude Code here and run /super-board onboard"
+  fi
 }
 
 main "$@"

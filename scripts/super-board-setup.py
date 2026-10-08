@@ -261,8 +261,10 @@ def migrate_config(cfg):
         c["timezone"] = machine_tz()
         changes.append(f"timezone {c['timezone']} added")
     if not c.get("worker_backend"):
-        c["worker_backend"] = "workflow"
-        changes.append("worker_backend \"workflow\" added")
+        # OpenCode has no Workflow tool: default its headless backend so a plain
+        # `run` dispatches. Claude Code keeps the in-session workflow default.
+        c["worker_backend"] = "opencode" if os.environ.get("OPENCODE") else "workflow"
+        changes.append(f"worker_backend \"{c['worker_backend']}\" added")
     return c, changes
 
 

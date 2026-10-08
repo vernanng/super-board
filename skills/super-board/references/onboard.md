@@ -2,9 +2,13 @@
 
 Config schema and field notes: `config-schema.json`. Loaded by `SKILL.md` for `super-board onboard`.
 
-**Where it runs:** the current Claude Code session, in the user's folder. Not headless.
+**Where it runs:** the current agent session, in the user's folder. Not headless. Host:
+`bash .claude/bin/super-board-host.sh` → `claude` | `codex` | `opencode` (env `OPENCODE` set ⇒
+OpenCode). **[OpenCode]** marks a step that differs on that host; there, read `AskUserQuestion` as
+the host's question tool and `Bash` as its shell tool.
 Invoked as `/super-board onboard` (get.sh / install.sh) or `/super-board:super-board onboard`
-(plugin install — skill names carry the plugin prefix).
+(plugin install — skill names carry the plugin prefix); on OpenCode install with
+`install-opencode.sh` first (step 1).
 
 ## Design rules
 
@@ -14,7 +18,7 @@ Invoked as `/super-board onboard` (get.sh / install.sh) or `/super-board:super-b
 | Minimal text | what it found in one line, then the question. Details go in an option's description or one dim line under it — never a paragraph |
 | Recommended first | every question puts its recommended option FIRST, labelled `(Recommended)`, so Enter takes it |
 | One tool | ask with `AskUserQuestion` (≤ 4 questions per call, ≤ 4 options per question; the built-in "Other" box is the free-text option). NEVER free-text a choice that has options |
-| Fix, don't ask | a must-have (skills, scripts, workflows, guard hooks, settings entries, old folders, config keys, labels, columns) is fixed with NO question and listed under "Fixed for you". Only system tools and sign-ins are asked — through Claude Code's own permission prompt on the exact command |
+| Fix, don't ask | a must-have (skills, scripts, workflows, guard hooks, settings entries, old folders, config keys, labels, columns) is fixed with NO question and listed under "Fixed for you". Only system tools and sign-ins are asked — through the host's own permission prompt on the exact command. On OpenCode the guard plugin replaces the settings entries |
 | Save as you go | every answer is written to `.claude/super-board/onboard-answers.json` the moment it is given |
 | Write once | files in the repo (config, settings.json allow lines, AGENTS.md, CLAUDE.md, docs) change only at step 8, after "Write everything". GitHub-side actions the user just picked (create or extend the board, create `staging`) run in their own step |
 | Secrets | NEVER read, grep, cat or source a dotenv file. Key names only, via `.claude/bin/super-board-env-check.sh` |
@@ -23,7 +27,7 @@ Invoked as `/super-board onboard` (get.sh / install.sh) or `/super-board:super-b
 own copy, `PACK=$(dirname "$(find ~/.claude/plugins -path '*super-board*' -name install.sh -not -path
 '*/node_modules/*' 2>/dev/null | head -1)")`, `SB=$PACK/scripts`. `$PACK` empty → `🛑 Can't find the
 super-board plugin files. Run the one-line installer (get.sh) or ./install.sh <this-dir> from a
-checkout, then re-run onboard.`
+checkout (on OpenCode: ./install-opencode.sh <this-dir>), then re-run onboard.`
 
 | Script | Used in |
 |---|---|
@@ -66,7 +70,7 @@ checkout, then re-run onboard.`
 | 2 | `2 of 8 · 🔑 GitHub — sign in so I can manage boards.` |
 | 3 | `3 of 8 · 🗂️ Board — the robot takes tickets from here.` |
 | 4 | `4 of 8 · 🌿 Branch — where finished work merges.` |
-| 5 | `5 of 8 · 📜 AGENTS.md — Claude reads AGENTS.md; CLAUDE.md becomes "@AGENTS.md".` |
+| 5 | `5 of 8 · 📜 AGENTS.md — your agent reads AGENTS.md; CLAUDE.md becomes "@AGENTS.md".` |
 | 6 | `6 of 8 · 🛡️ Policies — what the robot may do alone.` |
 | 7 | `7 of 8 · 📥 Bug sources — where to find problems to fix.` |
 | 8 | `8 of 8 · ✅ Review — nothing is written until you say so.` |
@@ -129,20 +133,27 @@ Write it atomically (temp file + rename) after every answer. A halt never loses 
       's#.*zoneinfo/##', else timedatectl show -p Timezone --value, else "UTC". Shown at step 8.
 
 1. 🔍 CHECKS — nothing asked except system tools and sign-ins
+   ├─ Host: `bash .claude/bin/super-board-host.sh` → claude | codex | opencode (env OPENCODE ⇒
+   │    opencode). **[OpenCode]** install/update with the pack's install-opencode.sh, not
+   │    install.sh: OpenCode has no settings.json hooks, and the guards come from
+   │    .opencode/plugins/super-board-guards.ts (install-opencode.sh runs install.sh --no-hooks).
+   │    Skip the settings.json merge and the protect-main step — here, in step 6 and in step 8.
    ├─ python3 $SB/super-board-setup.py fix --text
    │    Fixes with NO question, backed up first to .claude/super-board/backup/<ts>/:
    │    skills, .claude/bin scripts, workflows, guard hooks + settings.json entries (runs the
-   │    pack's install.sh), removes old skill folders (super-refine, cleanup-wt, arch-loop),
-   │    migrates every config to the v3 keys, git init, Matt Pocock's helper skills (Node present).
+   │    pack's install.sh; **[OpenCode]** run install-opencode.sh instead), removes old skill
+   │    folders (super-refine, cleanup-wt, arch-loop), migrates every config to the v3 keys,
+   │    git init, Matt Pocock's helper skills (Node present); on OpenCode it defaults config
+   │    `worker_backend` to "opencode".
    ├─ Print its list exactly, one ✓ per line:
    │      ⏺ Fixed for you:
    │        ✓ super-board skills and scripts installed
    │        ✓ board engine (workflow) installed
    │        ✓ 6 safety guards switched on
-   │        ✓ settings.json entries added (backup kept)
+   │        ✓ settings.json entries added (backup kept)   ([OpenCode] guards → .opencode/plugins/)
    │        ✓ git repo found
-   ├─ Each `needs` item (a system tool): one line, then run its `command` with Bash — Claude
-   │    Code's permission prompt IS the question. No AskUserQuestion.
+   ├─ Each `needs` item (a system tool): one line, then run its `command` with Bash — the host's
+   │    permission prompt IS the question. No AskUserQuestion.
    │      Needs your machine: Node.js isn't installed. It's needed for Matt Pocock's coding
    │      skills (tests, code review, debugging) the board uses.
    │      → Bash(brew install node && npx -y skills@latest add mattpocock/skills)
@@ -155,7 +166,7 @@ Write it atomically (temp file + rename) after every answer. A halt never loses 
    │      { echo '(async function(){'; sed 's/^export const meta/const meta/' \
    │        .claude/workflows/super-board-wave.js; echo '})'; } | node --check --input-type=module
    │    Fails → fix re-copies it; still failing → 🛑 (error table). Remind once: dynamic
-   │    workflows must be ON in /config.
+   │    workflows must be ON in /config ([OpenCode] skip the reminder — worker_backend is "opencode").
    └─ OLDER SUPER-BOARD (the result says `upgraded: true`): same rule, no question. Header
       `1 of 8 · 🔍 Checks — found super-board v<from>; upgrading to v<pack>.` and the list:
           ⏺ Upgraded for you (backup: .claude/super-board/backup/<ts>/)
@@ -256,7 +267,7 @@ Write it atomically (temp file + rename) after every answer. A halt never loses 
       `## Ticket format` section from references/ticket-format.md (create, or replace only that
       section). The block's "Writing (super-board)" table links it and writing-standard.md.
 
-6. 🛡️ POLICIES — ONE AskUserQuestion call, two questions; details folded
+6. 🛡️ POLICIES — ONE AskUserQuestion call, two questions; details folded ([OpenCode] Q2 skipped)
    Q1 header "Rules", "Use the safe defaults?"
       • Yes (Recommended) — description: "robot merges normal changes · money/logins/DB wait for
         you · no pushes to main · migrate test + staging only"
@@ -266,6 +277,7 @@ Write it atomically (temp file + rename) after every answer. A halt never loses 
    Q2 header "Permissions", "Let it run its commands without asking each time?"
       • Yes, add <N> lines to settings.json (Recommended)
       • No, ask me each time
+   [OpenCode] no settings.json: skip Q2 (the host asks per command; the guard plugin is already wired)
    Folded details = ONE dim line under each, never a table:
       merge_policy.default auto · always_human: money, auth, schema · push guard on (main, master,
       <base>) · migrations.allowed_envs: test, staging
@@ -278,9 +290,10 @@ Write it atomically (temp file + rename) after every answer. A halt never loses 
          snapshots, migration SQL not counted); always_human = schema defaults (money, auth,
          destructive schema). A matching PR parks in Blocked with 🙋.
     b. "Push guard" — "Block pushing straight to main?" [Yes (Recommended for a repo with
-       commits) / No]. Skipped when settings.json already wires guard-protected-push.py. Script
-       missing (--no-hooks install) → record the answer and say: "Run ./install.sh --no-hooks
-       --protect-main <this-dir> — it installs only this guard."
+       commits) / No]. Skipped when settings.json already wires guard-protected-push.py, or on
+       OpenCode (the guard plugin blocks main pushes). Script missing (--no-hooks install) →
+       record the answer and say: "Run ./install.sh --no-hooks --protect-main <this-dir> — it
+       installs only this guard."
     c. "Databases" (multiSelect, only when migration dirs exist) — "Which databases may the robot
        migrate?" [test (Recommended) / staging (Recommended) / live] → migrations.allowed_envs;
        target_env "live" on a production base, else "staging"; commands from the manifest's
@@ -296,6 +309,8 @@ Write it atomically (temp file + rename) after every answer. A halt never loses 
    "Bash(gh pr merge:*)"), one "Bash(<migrate command>)" per allowed env, "Bash(bash
    .claude/bin/super-board-env-check.sh:*)" and the test runner. N counts what is NOT already in
    settings.json: `super-board-settings.py allow .claude/settings.json <rules…> --dry-run`.
+   [OpenCode] skip this paragraph — no settings.json; the plugin runs the guards and the host
+   prompts per command.
 
 7. 📥 BUG SOURCES — tick sources; "Add another source" is the free-text box
    ├─ AskUserQuestion multiSelect "Where should I look for problems?" (header "Bug sources"):
@@ -329,7 +344,7 @@ Write it atomically (temp file + rename) after every answer. A halt never loses 
 8. ✅ REVIEW — compact table, then write once
    ├─ Two columns, no borders:
    │      Board    Ledgerly Roadmap #4 (+QA)    Branch   staging (new)
-   │      Rules    safe defaults                Perms    7 lines
+   │      Rules    safe defaults                Perms    7 lines ([OpenCode] —)
    │      AGENTS   rules moved, CLAUDE.md→@     Sources  sentry, github, prs, arch, linear
    ├─ AskUserQuestion "Write everything?" (header "Save") [Write everything (Recommended) /
    │    Change one thing → pick the step, walk only it, back here / Cancel — nothing written].
@@ -337,12 +352,14 @@ Write it atomically (temp file + rename) after every answer. A halt never loses 
    │    ├─ .claude/super-board/configs/<slug>.json (committed): description, project, target
    │    │    {type: repo | repo+url}, repo, base_branch, timezone, columns (the seven), labels,
    │    │    paths, merge_policy, migrations, collect (incl. custom), notifications {channel:
-   │    │    "session", bot_identity}, worker_backend "workflow". No `variant`.
+   │    │    "session", bot_identity}, worker_backend "workflow" ("opencode" on an OpenCode host).
+   │    │    No `variant`.
    │    ├─ .claude/super-board/active ← <slug>
    │    ├─ .gitignore += .claude/super-board/active, onboard-answers.json, onboard-staged/,
    │    │    backup/, inflight/, migrations/, upgrade.json (all under .claude/super-board/)
    │    ├─ settings.json: super-board-settings.py allow … ; protect main →
    │    │    super-board-settings.py hooks .claude/settings.json <pack>/hooks/settings-protect-main.json
+   │    │    ([OpenCode] skip both — no settings.json; the plugin is the guard)
    │    ├─ AGENTS.md / CLAUDE.md: super-board-agents-md.py backup, then write --src <staged>
    │    │    --dest AGENTS.md, pointer --tail <staged tail> --force, block, check
    │    └─ docs/agents/issue-tracker.md; docs/super-board/PROJECT.md (a sub-agent drafts it from
@@ -420,11 +437,11 @@ answers are kept and it resumes at <step>".
 
 | Step | Failure | What the user sees |
 |---|---|---|
-| 1 | Pack files not found (plugin) | `🛑 Can't find the super-board plugin files. Run the one-line installer (get.sh) or ./install.sh <this-dir> from a checkout, then re-run onboard.` |
+| 1 | Pack files not found (plugin) | `🛑 Can't find the super-board plugin files. Run the one-line installer (get.sh) or ./install.sh <this-dir> from a checkout (on OpenCode: ./install-opencode.sh <this-dir>), then re-run onboard.` |
 | 1 | A tool install declined (git, gh) | `Without <tool> the board can't <why>. Your answers are saved — run <command>, then re-run onboard.` |
 | 1 | Node declined, or `npx skills add` fails | `⚠️ Matt Pocock's skills aren't installed — lanes use built-in checklists. Later: <command>.` Continues. |
 | 1 | Workflow still fails `node --check` after the re-copy | `🛑 .claude/workflows/super-board-wave.js is corrupt. Re-run ./install.sh <this-dir> — don't hand-edit it.` |
-| 1 | settings.json invalid JSON | `✋ .claude/settings.json is not valid JSON; I left it untouched. Fix it, then re-run — only the settings entries repeat.` |
+| 1 | settings.json invalid JSON | `✋ .claude/settings.json is not valid JSON; I left it untouched. Fix it, then re-run — only the settings entries repeat.` ([OpenCode] no settings.json — skip.) |
 | 2 | Scope refused in the browser | `🔑 GitHub asked for project,read:project,repo and you said no. Without them I can't read or move cards. Re-run: gh auth refresh -s project,read:project,repo.` |
 | 2 | Repo create refused | `📦 GitHub refused to create the repo (org admin required, or the free-repo quota). Pick an existing repo, or create one in the web UI, then re-run.` |
 | 3 | Org project denied | `🔑 You can't create projects under <org>. Ask an org admin, or use your account: gh project create --owner @me.` |

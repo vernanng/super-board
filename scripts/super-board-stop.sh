@@ -165,7 +165,7 @@ if [ -d "$INFLIGHT_DIR" ]; then
 fi
 
 DISPATCHER_PIDS=$(pgrep -f 'super-board-run\.sh' 2>/dev/null || true)
-ORPHAN_WORKERS=$(pgrep -f 'claude -p .*super-board' 2>/dev/null || true)
+ORPHAN_WORKERS=$(pgrep -f '(claude -p|opencode run) .*super-board' 2>/dev/null || true)
 CODEX_WAVE_MARKER=".claude/super-board/codex-wave.pid"
 CODEX_WAVE_PID=""
 if [ -f "$CODEX_WAVE_MARKER" ]; then
@@ -210,10 +210,10 @@ if [ "${#WORKERS[@]}" -gt 0 ]; then
   done
 fi
 
-# 3. Sweep any untracked claude -p super-board workers.
+# 3. Sweep any untracked super-board workers (claude -p or opencode run).
 if [ -n "$ORPHAN_WORKERS" ]; then
   log ""
-  log "🧹 sweeping untracked claude -p super-board workers"
+  log "🧹 sweeping untracked super-board workers"
   for pid in $ORPHAN_WORKERS; do
     kill_pid "$pid" "orphan-worker"
   done

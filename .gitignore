@@ -22,6 +22,12 @@ __pycache__/
 .claude/worktrees/
 .worktrees/
 
+# installed pack runtime (generated copies of skills/ + scripts/)
+.claude/skills/
+.claude/bin/
+.claude/workflows/
+.claude/hooks/
+
 # QA evidence (heavy artifacts; keep summaries)
 docs/super-board/runs/**/*.png
 docs/super-board/runs/**/*.jpg

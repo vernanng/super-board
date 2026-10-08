@@ -26,9 +26,10 @@
 
   // Worker dispatch backend. "workflow" (default) drains waves in-session via
   // the super-board-wave dynamic workflow (references/run-workflow.md);
-  // requires dynamic workflows enabled in /config. "claude-p" is the legacy
-  // headless dispatcher (.claude/bin/super-board-run.sh) — explicit opt-in
-  // only; the dispatcher refuses to run (exit 78) unless set here.
+  // requires dynamic workflows enabled in /config. "claude-p" and "opencode"
+  // are the headless dispatcher (.claude/bin/super-board-run.sh), which spawns
+  // `claude -p` or `opencode run` workers — explicit opt-in only; the
+  // dispatcher refuses to run (exit 78) unless one is set here.
   "worker_backend": "workflow",
 
   // Default model ladder for lane workers, indexed by card complexity from

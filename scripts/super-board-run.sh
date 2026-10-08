@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # super-board-run.sh — headless autonomous runner.
 # Spawned as `nohup scripts/super-board-run.sh <config-slug> &`.
-# Pure shell while-loop. Dispatches `claude -p` workers per lane.
+# Pure shell while-loop. Dispatches one headless worker per lane — `opencode run`
+# (worker_backend "opencode") or `claude -p` (worker_backend "claude-p").
 # Holds NO Claude session state — re-reads GitHub on every tick.
 #
 # Anti-zombie controls (added 2026-05-22 after #381 worker-storm incident):
@@ -27,7 +28,7 @@
 # PID namespace trap (Git Bash / MSYS, issue #13): `kill -0` inside this script checks MSYS-namespace
 # PIDs; PowerShell `Get-Process` checks Windows-namespace PIDs. The two disagree about the same
 # process — a live worker can look dead to Windows tooling and vice versa. Always diagnose liveness
-# with the same tool family that recorded the PID. Workers are started with `nohup claude -p ... &`
+# with the same tool family that recorded the PID. Workers are started with `nohup <worker> ... &`
 # (no subshell, no `exec` of a native PE), so `$!` names the worker itself rather than a bash stub.
 
 set -euo pipefail
@@ -90,10 +91,10 @@ MAX_DISPATCHES=$(jq -r '.max_dispatches // 0' "$CONFIG_PATH")
 
 # Workflow is the default backend (v1.6.0). This legacy dispatcher only runs
 # when the config opts in explicitly — never by accident or stale habit.
-if [ "$WORKER_BACKEND" != "claude-p" ]; then
-  echo "🛑 board '${CONFIG_SLUG}' uses the workflow backend (worker_backend=${WORKER_BACKEND})." >&2
-  echo "    Run it in-session: /super-board run ${CONFIG_SLUG}  (see references/run-workflow.md)" >&2
-  echo "    To use this legacy dispatcher, set \"worker_backend\": \"claude-p\" in the config." >&2
+if [ "$WORKER_BACKEND" != "claude-p" ] && [ "$WORKER_BACKEND" != "opencode" ]; then
+  echo "🛑 board '${CONFIG_SLUG}' uses worker_backend=${WORKER_BACKEND}." >&2
+  echo "    This headless dispatcher runs the \"claude-p\" (Claude Code) or \"opencode\" backend." >&2
+  echo "    In-session waves: /super-board run ${CONFIG_SLUG}  (see references/run-workflow.md)" >&2
   exit 78
 fi
 
@@ -114,6 +115,14 @@ fi  # end non-lib-only setup
 
 # ───────────────────────────── helpers ─────────────────────────────
 log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" | tee -a "$RUN_MANIFEST"; }
+
+# pgrep signature of a live worker for this backend (orphan scan + stop sweep).
+worker_pgrep() {
+  case "$WORKER_BACKEND" in
+    opencode) printf 'opencode run .*super-board' ;;
+    *)        printf 'claude -p .*super-board run' ;;
+  esac
+}
 
 PROJECT_ITEMS_JSON=""
 fetch_project_items() {
@@ -337,7 +346,10 @@ dispatch_lane() {
     printf 'prompt: %s\n\n' "$prompt"
   } >> "$worker_log"
   gh_checkpoint
-  nohup claude -p "$prompt" >> "$worker_log" 2>&1 &
+  case "$WORKER_BACKEND" in
+    opencode) nohup opencode run --auto "$prompt" >> "$worker_log" 2>&1 & ;;
+    *)        nohup claude -p "$prompt" >> "$worker_log" 2>&1 & ;;
+  esac
   pid=$!
   DISPATCH_COUNT=$((DISPATCH_COUNT + 1))
   DISPATCH_LOG="${DISPATCH_LOG}${issue}
@@ -582,11 +594,12 @@ gh_checkpoint
 log "super-board run started — config=${CONFIG_SLUG} base=${BASE_BRANCH} tick=${TICK_SECONDS}s max_workers=${MAX_WORKERS} no_progress_cycles=${NO_PROGRESS_CYCLES} max_dispatches=${MAX_DISPATCHES}"
 
 # Orphan-worker guard. `|| true` defends against pipefail when pgrep finds nothing.
-ORPHANS=$(pgrep -f 'claude -p .*super-board run' 2>/dev/null | grep -v "^$$\$" | wc -l | tr -d ' ' || true)
+ORPHAN_PATTERN=$(worker_pgrep)
+ORPHANS=$(pgrep -f "$ORPHAN_PATTERN" 2>/dev/null | grep -v "^$$\$" | wc -l | tr -d ' ' || true)
 ORPHANS=${ORPHANS:-0}
 if [ "$ORPHANS" -gt 0 ]; then
-  log "🛑 refusing to start: ${ORPHANS} super-board claude workers already running."
-  log "    Stop them first: pkill -f 'claude -p .*super-board run'"
+  log "🛑 refusing to start: ${ORPHANS} super-board workers already running."
+  log "    Stop them first: pkill -f '$ORPHAN_PATTERN'"
   log "    Then re-run: $0 $CONFIG_SLUG"
   exit 73
 fi
