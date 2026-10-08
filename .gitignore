@@ -19,6 +19,10 @@ __pycache__/
 .claude/super-board/active
 .claude/super-board/inflight/
 .claude/super-board/migrations/
+.claude/super-board/onboard-answers.json
+.claude/super-board/onboard-staged/
+.claude/super-board/backup/
+.claude/super-board/upgrade.json
 .claude/worktrees/
 .worktrees/
 
